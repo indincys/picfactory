@@ -1,6 +1,6 @@
 {
   "name": "picfactory",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "ChatGPT image generation automation desktop MVP",
   "main": "dist/main/main/index.js",
   "private": true,
@@ -75,7 +75,8 @@
     "publish": {
       "provider": "github",
       "owner": "indincys",
-      "repo": "picfactory"
+      "repo": "picfactory",
+      "releaseType": "release"
     }
   }
 }
