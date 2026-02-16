@@ -1,0 +1,80 @@
+{
+  "name": "picfactory",
+  "version": "0.1.0",
+  "description": "ChatGPT image generation automation desktop MVP",
+  "main": "dist/main/main/index.js",
+  "private": true,
+  "scripts": {
+    "clean": "rimraf dist release",
+    "dev:main": "tsc -p tsconfig.main.json --watch",
+    "dev:renderer": "vite",
+    "dev:electron": "wait-on dist/main/main/index.js tcp:5173 && cross-env NODE_ENV=development VITE_DEV_SERVER_URL=http://localhost:5173 electron dist/main/main/index.js",
+    "dev": "concurrently -k \"npm:dev:main\" \"npm:dev:renderer\" \"npm:dev:electron\"",
+    "build:main": "tsc -p tsconfig.main.json",
+    "build:renderer": "vite build",
+    "build": "npm run clean && npm run build:main && npm run build:renderer",
+    "start": "cross-env NODE_ENV=production electron dist/main/main/index.js",
+    "typecheck": "tsc -p tsconfig.main.json --noEmit && tsc -p tsconfig.renderer.json --noEmit",
+    "pack": "npm run build && electron-builder -c.electronDist=node_modules/electron/dist",
+    "pack:mac": "npm run build && electron-builder --mac dmg zip -c.electronDist=node_modules/electron/dist",
+    "pack:update": "npm run build && electron-builder --mac dmg zip -c.electronDist=node_modules/electron/dist --publish never",
+    "pack:update:generic": "(test -n \"$PICFACTORY_PUBLISH_URL\" || (echo \"请先设置 PICFACTORY_PUBLISH_URL（更新服务器地址）\" && exit 1)) && npm run build && electron-builder --mac dmg zip -c.electronDist=node_modules/electron/dist --config.publish.provider=generic --config.publish.url=$PICFACTORY_PUBLISH_URL --publish never"
+  },
+  "dependencies": {
+    "electron-updater": "^6.7.3",
+    "playwright": "^1.51.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "zustand": "^5.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.4",
+    "autoprefixer": "^10.4.20",
+    "concurrently": "^9.1.0",
+    "cross-env": "^7.0.3",
+    "electron": "^31.0.2",
+    "electron-builder": "^25.1.8",
+    "postcss": "^8.4.49",
+    "rimraf": "^6.0.1",
+    "tailwindcss": "^3.4.15",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.3",
+    "wait-on": "^8.0.1"
+  },
+  "build": {
+    "appId": "com.picfactory.desktop",
+    "productName": "PicFactory",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**",
+      "package.json"
+    ],
+    "mac": {
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "artifactName": "${productName}-${version}-${arch}.${ext}"
+    },
+    "win": {
+      "target": [
+        "nsis"
+      ]
+    },
+    "linux": {
+      "target": [
+        "AppImage"
+      ]
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "indincys",
+      "repo": "picfactory"
+    }
+  }
+}
