@@ -33,7 +33,7 @@ export function App(): JSX.Element {
 
   const authStage = authState?.stage ?? 'unknown';
   const updateStage = updateState?.stage ?? 'idle';
-  const isBusy = updateStage === 'checking' || updateStage === 'downloading';
+  const isBusy = updateStage === 'checking' || updateStage === 'downloading' || updateStage === 'installing';
 
   const onUpdateAction = async () => {
     if (updateStage === 'available') {
@@ -47,6 +47,10 @@ export function App(): JSX.Element {
     }
 
     if (updateStage === 'unsupported' || updateStage === 'downloading' || updateStage === 'checking') {
+      return;
+    }
+
+    if (updateStage === 'installing') {
       return;
     }
 
@@ -158,6 +162,8 @@ function getUpdateButtonLabel(state: UpdateStateEvent | null): string {
       return `下载中 ${Math.round(state?.progressPercent ?? 0)}%`;
     case 'downloaded':
       return '重启安装';
+    case 'installing':
+      return '安装中...';
     case 'unsupported':
       return '自动更新未启用';
     default:
@@ -234,6 +240,8 @@ function getUpdateStageLabel(stage: UpdateStage): string {
       return '下载中';
     case 'downloaded':
       return '已下载';
+    case 'installing':
+      return '安装中';
     case 'error':
       return '更新失败';
     case 'unsupported':

@@ -80,6 +80,7 @@ export type UpdateStage =
   | 'not_available'
   | 'downloading'
   | 'downloaded'
+  | 'installing'
   | 'error'
   | 'unsupported';
 

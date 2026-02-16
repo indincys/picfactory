@@ -91,6 +91,7 @@ PICFACTORY_PUBLISH_URL=https://你的更新服务器地址/updates npm run pack:
 
 注意：
 - macOS 自动更新要求应用已签名（Developer ID）。未签名包可用于本地功能验证，但生产分发时建议补齐签名与公证流程。
+- 请从“应用程序”目录运行 PicFactory（不要直接在 DMG 里双击运行），否则“重启安装”可能无法生效。
 
 ## 后续升级流程（每次发新版本）
 1. 修改 `package.json` 里的 `version`。
