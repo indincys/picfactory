@@ -55,7 +55,7 @@ npm run pack:mac
 
 当前项目已固定使用仓库：`indincys/picfactory`。
 
-1. 打包“带更新源”的安装包：
+1. 首次发布（手动）打包“带更新源”的安装包：
 
 ```bash
 npm run pack:update
@@ -67,6 +67,15 @@ npm run pack:update
 - 对应 `.blockmap` 文件
 
 3. 首次用户安装这版后，后续版本可在应用内点击更新，不需要手动覆盖安装 DMG。
+
+### 方案A-Plus（已配置）：推送 Tag 自动发布
+仓库已添加 GitHub Actions 自动发布流程：`/Users/qianwanfuhao/Documents/PicFactory/.github/workflows/release.yml`
+
+后续每次升级只需：
+1. 修改 `package.json` 的版本号（例如 `0.1.1`）。
+2. 提交并推送代码。
+3. 创建并推送标签（示例：`git tag v0.1.1 && git push origin v0.1.1`）。
+4. GitHub 会自动生成 Release 并上传更新文件。
 
 ### 方案B（备用）：自建更新服务器（generic）
 ```bash

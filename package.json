@@ -18,6 +18,7 @@
     "pack": "npm run build && electron-builder -c.electronDist=node_modules/electron/dist",
     "pack:mac": "npm run build && electron-builder --mac dmg zip -c.electronDist=node_modules/electron/dist",
     "pack:update": "npm run build && electron-builder --mac dmg zip -c.electronDist=node_modules/electron/dist --publish never",
+    "pack:publish": "npm run build && electron-builder --mac dmg zip -c.electronDist=node_modules/electron/dist --publish always",
     "pack:update:generic": "(test -n \"$PICFACTORY_PUBLISH_URL\" || (echo \"请先设置 PICFACTORY_PUBLISH_URL（更新服务器地址）\" && exit 1)) && npm run build && electron-builder --mac dmg zip -c.electronDist=node_modules/electron/dist --config.publish.provider=generic --config.publish.url=$PICFACTORY_PUBLISH_URL --publish never"
   },
   "dependencies": {
