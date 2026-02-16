@@ -212,7 +212,8 @@ export class PlaywrightRunner extends EventEmitter {
         };
       }
 
-      const message = error instanceof Error ? error.message : '自动化执行发生未知错误';
+      const rawMessage = error instanceof Error ? error.message : '自动化执行发生未知错误';
+      const message = sanitizeErrorMessage(rawMessage) || '自动化执行发生未知错误';
       const parsedSeconds = parseRateLimitWaitSeconds(message);
 
       if (parsedSeconds) {
@@ -264,15 +265,35 @@ export class PlaywrightRunner extends EventEmitter {
   private async launchContext(headless: boolean): Promise<BrowserContext> {
     const profileDir = resolveProfileDir();
     await this.fileService.ensureDir(profileDir);
+    const configuredChannel = process.env.PICFACTORY_BROWSER_CHANNEL?.trim();
 
-    const context = await chromium.launchPersistentContext(profileDir, {
-      headless,
-      timeout: DEFAULT_TIMEOUT_MS,
-      channel: process.env.PICFACTORY_BROWSER_CHANNEL || undefined,
-      acceptDownloads: true
-    });
-    context.setDefaultTimeout(ACTION_TIMEOUT_MS);
-    return context;
+    const candidates: Array<{ channel?: string }> = [];
+    if (configuredChannel) {
+      candidates.push({ channel: configuredChannel });
+    } else if (app.isPackaged) {
+      candidates.push({ channel: 'chrome' });
+      candidates.push({});
+    } else {
+      candidates.push({});
+    }
+
+    let lastError: unknown;
+    for (const candidate of candidates) {
+      try {
+        const context = await chromium.launchPersistentContext(profileDir, {
+          headless,
+          timeout: DEFAULT_TIMEOUT_MS,
+          channel: candidate.channel,
+          acceptDownloads: true
+        });
+        context.setDefaultTimeout(ACTION_TIMEOUT_MS);
+        return context;
+      } catch (error) {
+        lastError = error;
+      }
+    }
+
+    throw new Error(sanitizeErrorMessage(lastError));
   }
 
   private setAuthState(patch: Omit<Partial<ChatGPTAuthStateEvent>, 'checkedAtIso'>): ChatGPTAuthStateEvent {
@@ -340,11 +361,12 @@ async function detectAuthStage(page: Page): Promise<'logged_in' | 'logged_out' |
 }
 
 function formatRunnerError(error: unknown, fallback: string): string {
-  if (error instanceof Error) {
-    return `${fallback}：${error.message}`;
+  const detail = sanitizeErrorMessage(error);
+  if (!detail) {
+    return fallback;
   }
 
-  return fallback;
+  return `${fallback}：${detail}`;
 }
 
 function resolveProfileDir(): string {
@@ -358,6 +380,20 @@ function resolveProfileDir(): string {
   } catch {
     return path.join(process.cwd(), '.runtime', 'playwright-profile');
   }
+}
+
+function sanitizeErrorMessage(error: unknown): string {
+  const raw = error instanceof Error ? error.message : String(error ?? '');
+  const message = raw.trim();
+  if (!message) {
+    return '';
+  }
+
+  if (/Executable doesn't exist/i.test(message)) {
+    return '未找到可用浏览器内核。请先安装 Google Chrome 后重试。';
+  }
+
+  return message.split('\n')[0].trim();
 }
 
 async function ensureLoggedIn(page: Page): Promise<void> {
