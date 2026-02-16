@@ -12,7 +12,7 @@ ChatGPT 图片生成自动化桌面工具（MVP）。
 ## 环境要求
 - Node.js 20+
 - npm 10+
-- 安装版执行自动化时建议本机安装 Google Chrome（默认优先使用）
+- 安装版内置独立 Playwright 浏览器内核，不依赖本机 Chrome
 
 ## 本地开发与测试
 1. 安装依赖
@@ -31,6 +31,12 @@ PICFACTORY_MOCK_RUNNER=1 npm run dev
 
 ```bash
 PICFACTORY_ENABLE_REAL_RUNNER=1 npm run dev
+```
+
+如果本地开发首次运行提示缺少浏览器内核，先执行：
+
+```bash
+npm run prepare:browsers
 ```
 
 ## 打包安装（macOS）

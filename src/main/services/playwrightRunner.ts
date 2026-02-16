@@ -1,3 +1,5 @@
+import * as fs from 'node:fs';
+import * as os from 'node:os';
 import * as path from 'node:path';
 import { EventEmitter } from 'node:events';
 import { app } from 'electron';
@@ -263,37 +265,18 @@ export class PlaywrightRunner extends EventEmitter {
   }
 
   private async launchContext(headless: boolean): Promise<BrowserContext> {
+    configurePlaywrightBrowsersPath();
     const profileDir = resolveProfileDir();
     await this.fileService.ensureDir(profileDir);
     const configuredChannel = process.env.PICFACTORY_BROWSER_CHANNEL?.trim();
-
-    const candidates: Array<{ channel?: string }> = [];
-    if (configuredChannel) {
-      candidates.push({ channel: configuredChannel });
-    } else if (app.isPackaged) {
-      candidates.push({ channel: 'chrome' });
-      candidates.push({});
-    } else {
-      candidates.push({});
-    }
-
-    let lastError: unknown;
-    for (const candidate of candidates) {
-      try {
-        const context = await chromium.launchPersistentContext(profileDir, {
-          headless,
-          timeout: DEFAULT_TIMEOUT_MS,
-          channel: candidate.channel,
-          acceptDownloads: true
-        });
-        context.setDefaultTimeout(ACTION_TIMEOUT_MS);
-        return context;
-      } catch (error) {
-        lastError = error;
-      }
-    }
-
-    throw new Error(sanitizeErrorMessage(lastError));
+    const context = await chromium.launchPersistentContext(profileDir, {
+      headless,
+      timeout: DEFAULT_TIMEOUT_MS,
+      channel: configuredChannel,
+      acceptDownloads: true
+    });
+    context.setDefaultTimeout(ACTION_TIMEOUT_MS);
+    return context;
   }
 
   private setAuthState(patch: Omit<Partial<ChatGPTAuthStateEvent>, 'checkedAtIso'>): ChatGPTAuthStateEvent {
@@ -375,10 +358,37 @@ function resolveProfileDir(): string {
     return customPath;
   }
 
+  const userDataDir = resolveSafeUserDataDir();
+  return path.join(userDataDir, 'playwright-profile');
+}
+
+function resolveSafeUserDataDir(): string {
   try {
-    return path.join(app.getPath('userData'), 'playwright-profile');
+    if (app.isReady()) {
+      return app.getPath('userData');
+    }
   } catch {
-    return path.join(process.cwd(), '.runtime', 'playwright-profile');
+    // Fall through.
+  }
+
+  const home = process.env.HOME?.trim();
+  if (home) {
+    return path.join(home, '.picfactory-runtime');
+  }
+
+  return path.join(os.tmpdir(), 'picfactory-runtime');
+}
+
+function configurePlaywrightBrowsersPath(): void {
+  if (!app.isPackaged) {
+    return;
+  }
+
+  const bundledPath = path.join(process.resourcesPath, 'ms-playwright');
+  process.env.PLAYWRIGHT_BROWSERS_PATH = bundledPath;
+
+  if (!fs.existsSync(bundledPath)) {
+    throw new Error('安装包缺少内置浏览器组件，请安装最新版本后重试。');
   }
 }
 
@@ -389,8 +399,11 @@ function sanitizeErrorMessage(error: unknown): string {
     return '';
   }
 
-  if (/Executable doesn't exist/i.test(message)) {
-    return '未找到可用浏览器内核。请先安装 Google Chrome 后重试。';
+  if (/Executable doesn't exist|download new browsers|playwright install/i.test(message)) {
+    if (app.isPackaged) {
+      return '内置浏览器组件缺失，请重新安装最新版 PicFactory。';
+    }
+    return '未检测到 Playwright 浏览器，请先执行 npm run prepare:browsers。';
   }
 
   return message.split('\n')[0].trim();
