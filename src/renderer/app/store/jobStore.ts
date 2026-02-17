@@ -134,10 +134,6 @@ export const useJobStore = create<JobStore>((set, get) => ({
       .getAuthState()
       .then((state) => {
         set({ authState: state });
-        return window.picFactory.checkAuthStatus();
-      })
-      .then((state) => {
-        set({ authState: state });
       })
       .catch(() => undefined);
 

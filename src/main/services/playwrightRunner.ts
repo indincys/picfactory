@@ -42,23 +42,21 @@ export class PlaywrightRunner extends EventEmitter {
       });
     }
 
+    if (!this.manualContext || !isContextAlive(this.manualContext)) {
+      this.manualContext = undefined;
+      return this.setAuthState({
+        stage: 'unknown',
+        message: '请先点击“打开网页版”，在可见窗口中完成 Cloudflare 验证与登录。'
+      });
+    }
+
     this.setAuthState({
       stage: 'checking',
       message: '正在检查 ChatGPT 登录状态...'
     });
 
-    let context: BrowserContext | undefined;
-    let shouldClose = false;
-
     try {
-      if (this.manualContext && isContextAlive(this.manualContext)) {
-        context = this.manualContext;
-      } else {
-        context = await this.launchContext(true);
-        shouldClose = true;
-      }
-
-      const page = await openChatGPTPage(context, false);
+      const page = await openChatGPTPage(this.manualContext, false);
       const stage = await detectAuthStage(page);
 
       if (stage === 'logged_in') {
@@ -80,7 +78,7 @@ export class PlaywrightRunner extends EventEmitter {
         message: '页面结构暂未识别，请点击“打开网页版”确认登录状态。'
       });
     } catch (error) {
-      if (context && context === this.manualContext && !isContextAlive(context)) {
+      if (this.manualContext && !isContextAlive(this.manualContext)) {
         this.manualContext = undefined;
       }
 
@@ -88,10 +86,6 @@ export class PlaywrightRunner extends EventEmitter {
         stage: 'error',
         message: formatRunnerError(error, '登录状态检查失败')
       });
-    } finally {
-      if (shouldClose) {
-        await context?.close().catch(() => undefined);
-      }
     }
   }
 

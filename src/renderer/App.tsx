@@ -21,16 +21,6 @@ export function App(): JSX.Element {
     initializeIpc();
   }, [initializeIpc]);
 
-  useEffect(() => {
-    const timer = setInterval(() => {
-      void checkAuthStatus();
-    }, 120_000);
-
-    return () => {
-      clearInterval(timer);
-    };
-  }, [checkAuthStatus]);
-
   const authStage = authState?.stage ?? 'unknown';
   const updateStage = updateState?.stage ?? 'idle';
   const isBusy = updateStage === 'checking' || updateStage === 'downloading' || updateStage === 'installing';
