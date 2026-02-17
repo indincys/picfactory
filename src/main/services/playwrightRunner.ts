@@ -5,7 +5,7 @@ import { EventEmitter } from 'node:events';
 import { app } from 'electron';
 import type { BrowserContext, BrowserType, Locator, Page } from 'playwright';
 import type { RunnerTaskInput, RunnerTaskResult } from '../models/types';
-import type { ChatGPTAuthStateEvent } from '../../shared/contracts';
+import type { BrowserMode, BrowserModeState, ChatGPTAuthStateEvent } from '../../shared/contracts';
 import { FileService } from './fileService';
 import { chatGPTSelectors } from './chatgptSelectors';
 
@@ -15,10 +15,12 @@ const ACTION_TIMEOUT_MS = 15_000;
 const GENERATION_TIMEOUT_MS = 240_000;
 const DEFAULT_RATE_LIMIT_SECONDS = 15 * 60;
 const DEFAULT_LOGIN_WAIT_MS = 5 * 60_000;
+const MODE_CONFIG_FILENAME = 'browser-mode.json';
 let chromiumLoader: Promise<BrowserType> | undefined;
 
 export class PlaywrightRunner extends EventEmitter {
   private manualContext: BrowserContext | undefined;
+  private browserMode: BrowserMode;
   private runningTasks = 0;
   private authState: ChatGPTAuthStateEvent = {
     stage: 'unknown',
@@ -28,10 +30,47 @@ export class PlaywrightRunner extends EventEmitter {
 
   constructor(private readonly fileService: FileService) {
     super();
+    this.browserMode = loadBrowserMode();
   }
 
   getAuthState(): ChatGPTAuthStateEvent {
     return this.authState;
+  }
+
+  getBrowserModeState(): BrowserModeState {
+    return {
+      mode: this.browserMode,
+      message:
+        this.browserMode === 'system_chrome'
+          ? '稳定模式：使用本机 Chrome 登录会话（建议先关闭已打开的 Chrome 窗口）。'
+          : '独立模式：使用应用内置浏览器，不占用本机浏览器。'
+    };
+  }
+
+  async setBrowserMode(mode: BrowserMode): Promise<BrowserModeState> {
+    if (mode === this.browserMode) {
+      return this.getBrowserModeState();
+    }
+
+    if (this.runningTasks > 0) {
+      return {
+        ...this.getBrowserModeState(),
+        message: '任务执行中，当前不可切换浏览器模式。'
+      };
+    }
+
+    this.browserMode = mode;
+    saveBrowserMode(this.browserMode);
+    await this.manualContext?.close().catch(() => undefined);
+    this.manualContext = undefined;
+    this.setAuthState({
+      stage: 'unknown',
+      message:
+        mode === 'system_chrome'
+          ? '已切换为稳定模式，请点击“打开网页版”并在可见窗口完成登录。'
+          : '已切换为独立模式，请点击“打开网页版”并完成登录检查。'
+    });
+    return this.getBrowserModeState();
   }
 
   async checkAuthStatus(): Promise<ChatGPTAuthStateEvent> {
@@ -259,21 +298,52 @@ export class PlaywrightRunner extends EventEmitter {
   }
 
   private async launchContext(headless: boolean): Promise<BrowserContext> {
-    configurePlaywrightBrowsersPath();
     const chromium = await getChromium();
+    const configuredChannel = process.env.PICFACTORY_BROWSER_CHANNEL?.trim();
+    const context =
+      this.browserMode === 'system_chrome'
+        ? await this.launchSystemChromeContext(chromium, headless)
+        : await this.launchIsolatedContext(chromium, headless, configuredChannel);
+    context.setDefaultTimeout(ACTION_TIMEOUT_MS);
+    return context;
+  }
+
+  private async launchIsolatedContext(
+    chromium: BrowserType,
+    headless: boolean,
+    configuredChannel: string | undefined
+  ): Promise<BrowserContext> {
+    configurePlaywrightBrowsersPath();
     const profileDir = resolveProfileDir();
     await this.fileService.ensureDir(profileDir);
-    const configuredChannel = process.env.PICFACTORY_BROWSER_CHANNEL?.trim();
     const executablePath = resolveBundledChromiumExecutablePath();
-    const context = await chromium.launchPersistentContext(profileDir, {
+
+    return chromium.launchPersistentContext(profileDir, {
       headless,
       timeout: DEFAULT_TIMEOUT_MS,
       channel: executablePath ? undefined : configuredChannel,
       executablePath,
       acceptDownloads: true
     });
-    context.setDefaultTimeout(ACTION_TIMEOUT_MS);
-    return context;
+  }
+
+  private async launchSystemChromeContext(chromium: BrowserType, headless: boolean): Promise<BrowserContext> {
+    const userDataDir = resolveSystemChromeUserDataDir();
+    if (!userDataDir) {
+      throw new Error('未找到本机 Chrome 用户数据目录，请先安装并登录 Chrome。');
+    }
+
+    if (!fs.existsSync(userDataDir)) {
+      throw new Error('未检测到本机 Chrome 用户数据目录，请先打开 Chrome 登录一次后重试。');
+    }
+
+    return chromium.launchPersistentContext(userDataDir, {
+      headless,
+      timeout: DEFAULT_TIMEOUT_MS,
+      channel: 'chrome',
+      acceptDownloads: true,
+      args: ['--profile-directory=Default']
+    });
   }
 
   private setAuthState(patch: Omit<Partial<ChatGPTAuthStateEvent>, 'checkedAtIso'>): ChatGPTAuthStateEvent {
@@ -376,6 +446,68 @@ function resolveSafeUserDataDir(): string {
   return path.join(os.tmpdir(), 'picfactory-runtime');
 }
 
+function resolveModeConfigPath(): string {
+  return path.join(resolveSafeUserDataDir(), MODE_CONFIG_FILENAME);
+}
+
+function loadBrowserMode(): BrowserMode {
+  const envMode = process.env.PICFACTORY_BROWSER_MODE?.trim();
+  if (envMode === 'system_chrome' || envMode === 'isolated') {
+    return envMode;
+  }
+
+  try {
+    const configPath = resolveModeConfigPath();
+    if (!fs.existsSync(configPath)) {
+      return 'isolated';
+    }
+
+    const raw = fs.readFileSync(configPath, 'utf8');
+    const parsed = JSON.parse(raw) as { mode?: string };
+    if (parsed.mode === 'system_chrome' || parsed.mode === 'isolated') {
+      return parsed.mode;
+    }
+  } catch {
+    // Use default mode.
+  }
+
+  return 'isolated';
+}
+
+function saveBrowserMode(mode: BrowserMode): void {
+  try {
+    const configPath = resolveModeConfigPath();
+    fs.mkdirSync(path.dirname(configPath), { recursive: true });
+    fs.writeFileSync(configPath, JSON.stringify({ mode }), 'utf8');
+  } catch {
+    // Ignore persistence failures.
+  }
+}
+
+function resolveSystemChromeUserDataDir(): string | undefined {
+  const home = process.env.HOME?.trim();
+
+  if (process.platform === 'darwin') {
+    if (!home) {
+      return undefined;
+    }
+    return path.join(home, 'Library', 'Application Support', 'Google', 'Chrome');
+  }
+
+  if (process.platform === 'win32') {
+    const localAppData = process.env.LOCALAPPDATA?.trim();
+    if (!localAppData) {
+      return undefined;
+    }
+    return path.join(localAppData, 'Google', 'Chrome', 'User Data');
+  }
+
+  if (!home) {
+    return undefined;
+  }
+  return path.join(home, '.config', 'google-chrome');
+}
+
 function configurePlaywrightBrowsersPath(): void {
   if (!app.isPackaged) {
     return;
@@ -473,6 +605,14 @@ function sanitizeErrorMessage(error: unknown): string {
       return '内置浏览器组件缺失，请重新安装最新版 PicFactory。';
     }
     return '未检测到 Playwright 浏览器，请先执行 npm run prepare:browsers。';
+  }
+
+  if (/ProcessSingleton|profile is already in use/i.test(message)) {
+    return '检测到本机 Chrome 配置正在被占用。请先完全退出 Chrome 后重试，或切回独立模式。';
+  }
+
+  if (/Chromium distribution 'chrome' is not found/i.test(message)) {
+    return '未找到本机 Chrome，请先安装 Google Chrome 或切回独立模式。';
   }
 
   return message.split('\n')[0].trim();

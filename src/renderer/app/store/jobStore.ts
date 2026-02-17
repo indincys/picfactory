@@ -1,5 +1,7 @@
 import { create } from 'zustand';
 import type {
+  BrowserMode,
+  BrowserModeState,
   ChatGPTAuthStateEvent,
   CreateJobPayload,
   GenerationTask,
@@ -20,6 +22,7 @@ interface JobStore {
   progress: JobProgressEvent | null;
   rateLimit: RateLimitEvent | null;
   authState: ChatGPTAuthStateEvent | null;
+  browserMode: BrowserMode;
   updateState: UpdateStateEvent | null;
   lastError: string | null;
   logs: string[];
@@ -35,6 +38,7 @@ interface JobStore {
   deleteOutput: (taskId: string) => Promise<void>;
   checkAuthStatus: () => Promise<ChatGPTAuthStateEvent>;
   openChatGPTWeb: () => Promise<ChatGPTAuthStateEvent>;
+  setBrowserMode: (mode: BrowserMode) => Promise<void>;
   checkForUpdates: () => Promise<void>;
   downloadUpdate: () => Promise<void>;
   quitAndInstallUpdate: () => Promise<void>;
@@ -46,6 +50,7 @@ export const useJobStore = create<JobStore>((set, get) => ({
   progress: null,
   rateLimit: null,
   authState: null,
+  browserMode: 'isolated',
   updateState: null,
   lastError: null,
   logs: [],
@@ -138,6 +143,13 @@ export const useJobStore = create<JobStore>((set, get) => ({
       .catch(() => undefined);
 
     void window.picFactory
+      .getBrowserMode()
+      .then((state: BrowserModeState) => {
+        set({ browserMode: state.mode });
+      })
+      .catch(() => undefined);
+
+    void window.picFactory
       .getUpdateState()
       .then((state) => {
         set({ updateState: state });
@@ -210,6 +222,14 @@ export const useJobStore = create<JobStore>((set, get) => ({
     const state = await window.picFactory.openChatGPTWeb();
     set({ authState: state });
     return state;
+  },
+
+  setBrowserMode: async (mode) => {
+    const state = await window.picFactory.setBrowserMode(mode);
+    set((current) => ({
+      browserMode: state.mode,
+      logs: state.message ? appendLog(current.logs, `浏览器模式：${state.message}`) : current.logs
+    }));
   },
 
   checkForUpdates: async () => {

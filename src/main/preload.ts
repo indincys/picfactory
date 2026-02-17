@@ -1,5 +1,7 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import {
+  BrowserMode,
+  BrowserModeState,
   ChatGPTAuthStateEvent,
   CreateJobPayload,
   GenerationTask,
@@ -25,6 +27,8 @@ const api = {
   getAuthState: (): Promise<ChatGPTAuthStateEvent> => ipcRenderer.invoke(IPCChannels.authGetState),
   checkAuthStatus: (): Promise<ChatGPTAuthStateEvent> => ipcRenderer.invoke(IPCChannels.authCheck),
   openChatGPTWeb: (): Promise<ChatGPTAuthStateEvent> => ipcRenderer.invoke(IPCChannels.authOpenWeb),
+  getBrowserMode: (): Promise<BrowserModeState> => ipcRenderer.invoke(IPCChannels.authGetBrowserMode),
+  setBrowserMode: (mode: BrowserMode): Promise<BrowserModeState> => ipcRenderer.invoke(IPCChannels.authSetBrowserMode, mode),
   getUpdateState: (): Promise<UpdateStateEvent> => ipcRenderer.invoke(IPCChannels.updaterGetState),
   checkForUpdates: (): Promise<UpdateStateEvent> => ipcRenderer.invoke(IPCChannels.updaterCheck),
   downloadUpdate: (): Promise<UpdateStateEvent> => ipcRenderer.invoke(IPCChannels.updaterDownload),

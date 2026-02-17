@@ -1,4 +1,6 @@
 import type {
+  BrowserMode,
+  BrowserModeState,
   ChatGPTAuthStateEvent,
   CreateJobPayload,
   GenerationTask,
@@ -23,6 +25,8 @@ declare global {
       getAuthState: () => Promise<ChatGPTAuthStateEvent>;
       checkAuthStatus: () => Promise<ChatGPTAuthStateEvent>;
       openChatGPTWeb: () => Promise<ChatGPTAuthStateEvent>;
+      getBrowserMode: () => Promise<BrowserModeState>;
+      setBrowserMode: (mode: BrowserMode) => Promise<BrowserModeState>;
       getUpdateState: () => Promise<UpdateStateEvent>;
       checkForUpdates: () => Promise<UpdateStateEvent>;
       downloadUpdate: () => Promise<UpdateStateEvent>;

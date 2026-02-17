@@ -100,6 +100,13 @@ export interface ChatGPTAuthStateEvent {
   message?: string;
 }
 
+export type BrowserMode = 'isolated' | 'system_chrome';
+
+export interface BrowserModeState {
+  mode: BrowserMode;
+  message?: string;
+}
+
 export const IPCChannels = {
   jobCreate: 'job:create',
   jobStart: 'job:start',
@@ -111,6 +118,8 @@ export const IPCChannels = {
   authGetState: 'auth:get-state',
   authCheck: 'auth:check',
   authOpenWeb: 'auth:open-web',
+  authGetBrowserMode: 'auth:get-browser-mode',
+  authSetBrowserMode: 'auth:set-browser-mode',
   updaterGetState: 'updater:get-state',
   updaterCheck: 'updater:check',
   updaterDownload: 'updater:download',

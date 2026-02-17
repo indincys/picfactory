@@ -1,6 +1,6 @@
 {
   "name": "picfactory",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "description": "ChatGPT image generation automation desktop MVP",
   "main": "dist/main/main/index.js",
   "private": true,

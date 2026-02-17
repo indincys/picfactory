@@ -1,6 +1,8 @@
 import * as path from 'node:path';
 import { app, BrowserWindow, ipcMain } from 'electron';
 import {
+  BrowserMode,
+  BrowserModeState,
   ChatGPTAuthStateEvent,
   CreateJobPayload,
   GenerationTask,
@@ -73,6 +75,14 @@ export function registerJobHandlers(getMainWindow: () => BrowserWindow | null): 
 
   ipcMain.handle(IPCChannels.authOpenWeb, async () => {
     return runner.openChatGPTWeb();
+  });
+
+  ipcMain.handle(IPCChannels.authGetBrowserMode, async (): Promise<BrowserModeState> => {
+    return runner.getBrowserModeState();
+  });
+
+  ipcMain.handle(IPCChannels.authSetBrowserMode, async (_event, mode: BrowserMode): Promise<BrowserModeState> => {
+    return runner.setBrowserMode(mode);
   });
 
   ipcMain.handle(IPCChannels.updaterGetState, async () => {
