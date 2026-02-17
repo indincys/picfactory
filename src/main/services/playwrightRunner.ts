@@ -3,8 +3,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { EventEmitter } from 'node:events';
 import { app } from 'electron';
-import { chromium } from 'playwright';
-import type { BrowserContext, Locator, Page } from 'playwright';
+import type { BrowserContext, BrowserType, Locator, Page } from 'playwright';
 import type { RunnerTaskInput, RunnerTaskResult } from '../models/types';
 import type { ChatGPTAuthStateEvent } from '../../shared/contracts';
 import { FileService } from './fileService';
@@ -16,6 +15,7 @@ const ACTION_TIMEOUT_MS = 15_000;
 const GENERATION_TIMEOUT_MS = 240_000;
 const DEFAULT_RATE_LIMIT_SECONDS = 15 * 60;
 const DEFAULT_LOGIN_WAIT_MS = 5 * 60_000;
+let chromiumLoader: Promise<BrowserType> | undefined;
 
 export class PlaywrightRunner extends EventEmitter {
   private manualContext: BrowserContext | undefined;
@@ -266,13 +266,16 @@ export class PlaywrightRunner extends EventEmitter {
 
   private async launchContext(headless: boolean): Promise<BrowserContext> {
     configurePlaywrightBrowsersPath();
+    const chromium = await getChromium();
     const profileDir = resolveProfileDir();
     await this.fileService.ensureDir(profileDir);
     const configuredChannel = process.env.PICFACTORY_BROWSER_CHANNEL?.trim();
+    const executablePath = resolveBundledChromiumExecutablePath();
     const context = await chromium.launchPersistentContext(profileDir, {
       headless,
       timeout: DEFAULT_TIMEOUT_MS,
-      channel: configuredChannel,
+      channel: executablePath ? undefined : configuredChannel,
+      executablePath,
       acceptDownloads: true
     });
     context.setDefaultTimeout(ACTION_TIMEOUT_MS);
@@ -390,6 +393,78 @@ function configurePlaywrightBrowsersPath(): void {
   if (!fs.existsSync(bundledPath)) {
     throw new Error('安装包缺少内置浏览器组件，请安装最新版本后重试。');
   }
+}
+
+function resolveBundledChromiumExecutablePath(): string | undefined {
+  if (!app.isPackaged) {
+    return undefined;
+  }
+
+  const browsersRoot = path.join(process.resourcesPath, 'ms-playwright');
+  if (!fs.existsSync(browsersRoot)) {
+    return undefined;
+  }
+
+  const chromiumDirName = fs
+    .readdirSync(browsersRoot, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => entry.name)
+    .find((name) => /^chromium-\d+$/.test(name));
+
+  if (!chromiumDirName) {
+    return undefined;
+  }
+
+  const chromiumRoot = path.join(browsersRoot, chromiumDirName);
+  const candidates = getChromiumExecutableCandidates(chromiumRoot);
+  for (const candidate of candidates) {
+    if (fs.existsSync(candidate)) {
+      return candidate;
+    }
+  }
+
+  return undefined;
+}
+
+function getChromiumExecutableCandidates(chromiumRoot: string): string[] {
+  if (process.platform === 'darwin') {
+    return [
+      path.join(
+        chromiumRoot,
+        'chrome-mac-arm64',
+        'Google Chrome for Testing.app',
+        'Contents',
+        'MacOS',
+        'Google Chrome for Testing'
+      ),
+      path.join(
+        chromiumRoot,
+        'chrome-mac',
+        'Google Chrome for Testing.app',
+        'Contents',
+        'MacOS',
+        'Google Chrome for Testing'
+      )
+    ];
+  }
+
+  if (process.platform === 'win32') {
+    return [
+      path.join(chromiumRoot, 'chrome-win', 'chrome.exe'),
+      path.join(chromiumRoot, 'chrome-win64', 'chrome.exe'),
+      path.join(chromiumRoot, 'chrome-win32', 'chrome.exe')
+    ];
+  }
+
+  return [path.join(chromiumRoot, 'chrome-linux', 'chrome')];
+}
+
+async function getChromium(): Promise<BrowserType> {
+  if (!chromiumLoader) {
+    chromiumLoader = import('playwright').then((module) => module.chromium);
+  }
+
+  return chromiumLoader;
 }
 
 function sanitizeErrorMessage(error: unknown): string {
