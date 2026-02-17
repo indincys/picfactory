@@ -126,6 +126,14 @@ export class UpdateService extends EventEmitter {
       return this.state;
     }
 
+    if (this.state.stage === 'checking' || this.state.stage === 'downloading' || this.state.stage === 'installing') {
+      return this.state;
+    }
+
+    if (this.state.stage === 'downloaded') {
+      return this.state;
+    }
+
     try {
       await autoUpdater.checkForUpdates();
     } catch (error) {
@@ -140,6 +148,14 @@ export class UpdateService extends EventEmitter {
 
   async downloadUpdate(): Promise<UpdateStateEvent> {
     if (!this.isSupported()) {
+      return this.state;
+    }
+
+    if (this.state.stage === 'downloading' || this.state.stage === 'installing' || this.state.stage === 'downloaded') {
+      return this.state;
+    }
+
+    if (this.state.stage !== 'available') {
       return this.state;
     }
 

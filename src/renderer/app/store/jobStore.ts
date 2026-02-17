@@ -217,13 +217,11 @@ export const useJobStore = create<JobStore>((set, get) => ({
   },
 
   checkForUpdates: async () => {
-    const state = await window.picFactory.checkForUpdates();
-    set({ updateState: state });
+    await window.picFactory.checkForUpdates();
   },
 
   downloadUpdate: async () => {
-    const state = await window.picFactory.downloadUpdate();
-    set({ updateState: state });
+    await window.picFactory.downloadUpdate();
   },
 
   quitAndInstallUpdate: async () => {
